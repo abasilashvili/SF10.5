@@ -9,7 +9,8 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.views import View
-from .tasks import hello
+from .tasks import send_email_task
+
 
 
 class NewsList(ListView):
@@ -123,7 +124,14 @@ def subscribe(request, pk):
     return render(request, 'subscribe.html', {'category': category, 'message': message})
 
 
-class IndexView(View):
-    def get(self, request):
-        hello.delay()
-        return HttpResponse('Hello!')
+class PostCreateView(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
+    permission_required = 'news.add_post'
+    template_name = 'post_add.html'
+    form_class = PostForm
+    model = Post
+
+    def form_valid(self, form):
+        post = form.save(commit=False)
+        post.save()
+        send_email_task.delay(post.pk)
+        return super().form_valid(form)
